@@ -305,12 +305,13 @@ func (srv *Server) HandleConn(newConn net.Conn) {
 	//go gossh.DiscardRequests(reqs)
 	go srv.handleRequests(ctx, reqs)
 	for ch := range chans {
-		handler := srv.ChannelHandlers[ch.ChannelType()]
+		chType := ch.ChannelType()
+		handler := srv.ChannelHandlers[chType]
 		if handler == nil {
 			handler = srv.ChannelHandlers["default"]
 		}
 		if handler == nil {
-			ch.Reject(gossh.UnknownChannelType, "unsupported channel type")
+			ch.Reject(gossh.UnknownChannelType, fmt.Sprintf("unsupported channel type `%s`", chType))
 			continue
 		}
 		go handler(srv, sshConn, ch, ctx)

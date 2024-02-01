@@ -40,10 +40,10 @@ func DirectTCPIPHandler(srv *Server, conn *gossh.ServerConn, newChan gossh.NewCh
 
 	dest := net.JoinHostPort(d.DestAddr, strconv.FormatInt(int64(d.DestPort), 10))
 
-	var dialer net.Dialer
 	dialFn := srv.LocalPortForwardingDialer
 	if dialFn == nil {
 		dialFn = func(ctx context.Context, network, address string) (io.ReadWriteCloser, error) {
+			var dialer net.Dialer
 			return dialer.DialContext(ctx, network, address)
 		}
 	}
