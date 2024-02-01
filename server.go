@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -67,6 +68,10 @@ type Server struct {
 	// SubsystemHandlers are handlers which are similar to the usual SSH command
 	// handlers, but handle named subsystems.
 	SubsystemHandlers map[string]SubsystemHandler
+
+	// LocalPortForwardingDialer is a callback that is invoked when a client start a local port forwarding
+	// channel. If nil, net.DialContext is used.
+	LocalPortForwardingDialer func(ctx context.Context, network, address string) (io.ReadWriteCloser, error)
 
 	listenerWg sync.WaitGroup
 	mu         sync.RWMutex

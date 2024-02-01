@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"context"
 	"io"
 	"log"
 	"net"
@@ -40,7 +41,13 @@ func DirectTCPIPHandler(srv *Server, conn *gossh.ServerConn, newChan gossh.NewCh
 	dest := net.JoinHostPort(d.DestAddr, strconv.FormatInt(int64(d.DestPort), 10))
 
 	var dialer net.Dialer
-	dconn, err := dialer.DialContext(ctx, "tcp", dest)
+	dialFn := srv.LocalPortForwardingDialer
+	if dialFn == nil {
+		dialFn = func(ctx context.Context, network, address string) (io.ReadWriteCloser, error) {
+			return dialer.DialContext(ctx, network, address)
+		}
+	}
+	dconn, err := dialFn(ctx, "tcp", dest)
 	if err != nil {
 		newChan.Reject(gossh.ConnectionFailed, err.Error())
 		return
