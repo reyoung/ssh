@@ -73,6 +73,9 @@ type Server struct {
 	// channel. If nil, net.DialContext is used.
 	LocalPortForwardingDialer func(ctx context.Context, network, address string) (io.ReadWriteCloser, error)
 
+	// ReversePortListen is a callback that is invoked when a client start a reverse port forwarding
+	ReversePortListen func(address string) (RemoteListener, error)
+
 	listenerWg sync.WaitGroup
 	mu         sync.RWMutex
 	listeners  map[net.Listener]struct{}

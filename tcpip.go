@@ -97,14 +97,14 @@ type remoteForwardChannelData struct {
 // adding the HandleSSHRequest callback to the server's RequestHandlers under
 // tcpip-forward and cancel-tcpip-forward.
 type ForwardedTCPHandler struct {
-	forwards map[string]net.Listener
+	forwards map[string]RemoteListener
 	sync.Mutex
 }
 
 func (h *ForwardedTCPHandler) HandleSSHRequest(ctx Context, srv *Server, req *gossh.Request) (bool, []byte) {
 	h.Lock()
 	if h.forwards == nil {
-		h.forwards = make(map[string]net.Listener)
+		h.forwards = make(map[string]RemoteListener)
 	}
 	h.Unlock()
 	conn := ctx.Value(ContextKeyConn).(*gossh.ServerConn)
@@ -119,13 +119,19 @@ func (h *ForwardedTCPHandler) HandleSSHRequest(ctx Context, srv *Server, req *go
 			return false, []byte("port forwarding is disabled")
 		}
 		addr := net.JoinHostPort(reqPayload.BindAddr, strconv.Itoa(int(reqPayload.BindPort)))
-		ln, err := net.Listen("tcp", addr)
+
+		listen := defaultListen
+		if srv.ReversePortListen != nil {
+			listen = srv.ReversePortListen
+		}
+
+		ln, err := listen(addr)
+
 		if err != nil {
 			// TODO: log listen failure
 			return false, []byte{}
 		}
-		_, destPortStr, _ := net.SplitHostPort(ln.Addr().String())
-		destPort, _ := strconv.Atoi(destPortStr)
+		destPort := ln.Port()
 		h.Lock()
 		h.forwards[addr] = ln
 		h.Unlock()
@@ -145,8 +151,8 @@ func (h *ForwardedTCPHandler) HandleSSHRequest(ctx Context, srv *Server, req *go
 					// TODO: log accept failure
 					break
 				}
-				originAddr, orignPortStr, _ := net.SplitHostPort(c.RemoteAddr().String())
-				originPort, _ := strconv.Atoi(orignPortStr)
+
+				originAddr, originPort := c.RemoteAddress, c.RemotePort
 				payload := gossh.Marshal(&remoteForwardChannelData{
 					DestAddr:   reqPayload.BindAddr,
 					DestPort:   uint32(destPort),
@@ -158,19 +164,19 @@ func (h *ForwardedTCPHandler) HandleSSHRequest(ctx Context, srv *Server, req *go
 					if err != nil {
 						// TODO: log failure to open channel
 						log.Println(err)
-						c.Close()
+						c.RWC.Close()
 						return
 					}
 					go gossh.DiscardRequests(reqs)
 					go func() {
 						defer ch.Close()
-						defer c.Close()
-						io.Copy(ch, c)
+						defer c.RWC.Close()
+						io.Copy(ch, c.RWC)
 					}()
 					go func() {
 						defer ch.Close()
-						defer c.Close()
-						io.Copy(c, ch)
+						defer c.RWC.Close()
+						io.Copy(c.RWC, ch)
 					}()
 				}()
 			}
